@@ -23,6 +23,7 @@ import alpine.event.framework.EventService;
 import alpine.model.IConfigProperty.PropertyType;
 import alpine.server.filters.ApiFilter;
 import alpine.server.filters.AuthenticationFilter;
+import org.cyclonedx.model.ExternalReference.Type;
 import org.datanucleus.store.types.wrappers.Date;
 import org.dependencytrack.JerseyTestRule;
 import org.dependencytrack.ResourceTest;
@@ -1261,19 +1262,211 @@ public class ProjectResourceTest extends ResourceTest {
 
     @Test
     public void getProjectByUuidTest() {
-        Project project = qm.createProject("ABC", null, "1.0", null, null, null, true, false);
-        Response response = jersey.target(V1_PROJECT + "/" + project.getUuid())
+        final var parentProject = new Project();
+        parentProject.setName("parent");
+        parentProject.setVersion("1.2.3");
+        qm.persist(parentProject);
+
+        final var manufacturer = new OrganizationalEntity();
+        manufacturer.setName("manufacturer");
+
+        final var supplier = new OrganizationalEntity();
+        supplier.setName("supplier");
+
+        final var property = new ProjectProperty();
+        property.setGroupName("groupName");
+        property.setPropertyName("propertyName");
+        property.setPropertyValue("propertyValue");
+        property.setPropertyType(PropertyType.STRING);
+
+        final var externalRef = new ExternalReference();
+        externalRef.setUrl("https://example.com");
+        externalRef.setType(Type.WEBSITE);
+
+        final var project = new Project();
+        project.setAuthor("author");
+        project.setPublisher("publisher");
+        project.setManufacturer(manufacturer);
+        project.setSupplier(supplier);
+        project.setGroup("group");
+        project.setName("name");
+        project.setVersion("1.0.0");
+        project.setClassifier(Classifier.LIBRARY);
+        project.setDescription("description");
+        project.setDirectDependencies("[{\"uuid\":\"c162be63-35f0-4059-b28b-327e6a01390a\"}]");
+        project.setCpe("cpe:2.3:*:vendor:product:1.0.0:update:edition:lang:swEdition:targetSw:targetHw:other");
+        project.setPurl("pkg:maven/namespace/name@1.0.0");
+        project.setSwidTagId("swidTagId");
+        project.setParent(parentProject);
+        project.setProperties(List.of(property));
+        project.setLastBomImport(new java.util.Date(1643767322000L));
+        project.setLastBomImportFormat("lastBomImportFormat");
+        project.setLastInheritedRiskScore(66.6);
+        project.setActive(false);
+        project.setExternalReferences(List.of(externalRef));
+        qm.persist(project);
+
+        qm.bind(project, List.of(qm.createTag("tag-1")));
+
+        final var metadataAuthor = new OrganizationalContact();
+        metadataAuthor.setName("metadataAuthor");
+        final var metadataSupplier = new OrganizationalEntity();
+        metadataSupplier.setName("metadataSupplier");
+        final var metadata = new ProjectMetadata();
+        metadata.setAuthors(List.of(metadataAuthor));
+        metadata.setSupplier(metadataSupplier);
+        metadata.setProject(project);
+        qm.persist(metadata);
+
+        final var metrics = new ProjectMetrics();
+        metrics.setProject(project);
+        metrics.setCritical(6);
+        metrics.setHigh(6);
+        metrics.setMedium(6);
+        metrics.setLow(6);
+        metrics.setUnassigned(6);
+        metrics.setVulnerabilities(6);
+        metrics.setVulnerableComponents(6);
+        metrics.setComponents(6);
+        metrics.setFindingsTotal(6);
+        metrics.setFindingsAudited(6);
+        metrics.setFindingsUnaudited(6);
+        metrics.setInheritedRiskScore(66.6);
+        metrics.setSuppressed(6);
+        metrics.setPolicyViolationsTotal(6);
+        metrics.setPolicyViolationsFail(6);
+        metrics.setPolicyViolationsInfo(6);
+        metrics.setPolicyViolationsWarn(6);
+        metrics.setPolicyViolationsAudited(6);
+        metrics.setPolicyViolationsUnaudited(6);
+        metrics.setPolicyViolationsLicenseAudited(6);
+        metrics.setPolicyViolationsLicenseTotal(6);
+        metrics.setPolicyViolationsLicenseUnaudited(6);
+        metrics.setPolicyViolationsOperationalAudited(6);
+        metrics.setPolicyViolationsOperationalTotal(6);
+        metrics.setPolicyViolationsOperationalUnaudited(6);
+        metrics.setPolicyViolationsSecurityAudited(6);
+        metrics.setPolicyViolationsSecurityTotal(6);
+        metrics.setPolicyViolationsSecurityUnaudited(6);
+        metrics.setFirstOccurrence(new java.util.Date(1677812583000L));
+        metrics.setLastOccurrence(new java.util.Date(1677812583000L));
+        qm.persist(metrics);
+
+        final UUID parentProjectUuid = parentProject.getUuid();
+        final UUID projectUuid = project.getUuid();
+
+        // Nuke L1 and L2 cache and close PM to ensure all changes are flushed.
+        qm.getPersistenceManager().getPersistenceManagerFactory().getDataStoreCache().evictAll();
+        qm.getPersistenceManager().evictAll();
+        qm.close();
+        Response response = jersey.target(V1_PROJECT + "/" + projectUuid)
                 .request()
                 .header(X_API_KEY, apiKey)
-                .get(Response.class);
-        Assert.assertEquals(200, response.getStatus(), 0);
-        Assert.assertNull(response.getHeaderString(TOTAL_COUNT_HEADER));
-        JsonObject json = parseJsonObject(response);
-        Assert.assertNotNull(json);
-        Assert.assertEquals("ABC", json.getString("name"));
-        Assert.assertEquals(1, json.getJsonArray("versions").size());
-        Assert.assertEquals(project.getUuid().toString(), json.getJsonArray("versions").getJsonObject(0).getJsonString("uuid").getString());
-        Assert.assertEquals("1.0", json.getJsonArray("versions").getJsonObject(0).getJsonString("version").getString());
+                .get();
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThatJson(getPlainTextBody(response))
+                .withMatcher("parentProjectUuid", equalTo(parentProjectUuid.toString()))
+                .withMatcher("projectUuid", equalTo(projectUuid.toString()))
+                .isEqualTo( """
+                      {
+                        "active": false,
+                        "author": "author",
+                        "children": [],
+                        "classifier": "LIBRARY",
+                        "cpe": "cpe:2.3:*:vendor:product:1.0.0:update:edition:lang:swEdition:targetSw:targetHw:other",
+                        "description": "description",
+                        "directDependencies": "[{\\"uuid\\":\\"c162be63-35f0-4059-b28b-327e6a01390a\\"}]",
+                        "externalReferences": [
+                          {
+                            "type": "website",
+                            "url": "https://example.com"
+                          }
+                        ],
+                        "group": "group",
+                        "lastBomImport": 1643767322000,
+                        "lastBomImportFormat": "lastBomImportFormat",
+                        "lastInheritedRiskScore": 66.6,
+                        "manufacturer": {
+                          "name": "manufacturer"
+                        },
+                        "metadata": {
+                          "supplier": {
+                            "name": "metadataSupplier"
+                          },
+                          "authors": [
+                            {
+                              "name":"metadataAuthor"
+                            }
+                        ]
+                        },
+                        "metrics":{
+                          "critical": 6,
+                          "high": 6,
+                          "medium": 6,
+                          "low": 6,
+                          "unassigned": 6,
+                          "vulnerabilities": 6,
+                          "vulnerableComponents":6,
+                          "components": 6,
+                          "suppressed": 6,
+                          "findingsTotal": 6,
+                          "findingsAudited": 6,
+                          "findingsUnaudited": 6,
+                          "inheritedRiskScore": 66.6,
+                          "policyViolationsFail": 6,
+                          "policyViolationsWarn": 6,
+                          "policyViolationsInfo": 6,
+                          "policyViolationsTotal": 6,
+                          "policyViolationsAudited": 6,
+                          "policyViolationsUnaudited": 6,
+                          "policyViolationsSecurityTotal": 6,
+                          "policyViolationsSecurityAudited": 6,
+                          "policyViolationsSecurityUnaudited": 6,
+                          "policyViolationsLicenseTotal": 6,
+                          "policyViolationsLicenseAudited": 6,
+                          "policyViolationsLicenseUnaudited": 6,
+                          "policyViolationsOperationalTotal": 6,
+                          "policyViolationsOperationalAudited": 6,
+                          "policyViolationsOperationalUnaudited": 6,
+                          "firstOccurrence": 1677812583000,
+                          "lastOccurrence": 1677812583000
+                        },
+                        "name": "name",
+                        "parent": {
+                          "name": "parent",
+                          "uuid": "${json-unit.matches:parentProjectUuid}",
+                          "version": "1.2.3"
+                        },
+                        "properties": [
+                          {
+                            "groupName": "groupName",
+                            "propertyName": "propertyName",
+                            "propertyType": "STRING",
+                            "propertyValue": "propertyValue"
+                          }
+                        ],
+                        "publisher": "publisher",
+                        "purl": "pkg:maven/namespace/name@1.0.0",
+                        "supplier": {
+                          "name": "supplier"
+                        },
+                        "swidTagId": "swidTagId",
+                        "tags": [
+                          {
+                            "name": "tag-1"
+                          }
+                        ],
+                        "uuid": "${json-unit.matches:projectUuid}",
+                        "version": "1.0.0",
+                        "versions": [
+                          {
+                            "active": false,
+                            "uuid": "${json-unit.matches:projectUuid}",
+                            "version": "1.0.0"
+                          }
+                        ]
+                      }
+                """);
     }
 
     @Test

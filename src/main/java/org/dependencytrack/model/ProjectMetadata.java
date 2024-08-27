@@ -27,6 +27,8 @@ import org.dependencytrack.persistence.converter.ToolsJsonConverter;
 
 import javax.jdo.annotations.Column;
 import javax.jdo.annotations.Convert;
+import javax.jdo.annotations.FetchGroup;
+import javax.jdo.annotations.FetchGroups;
 import javax.jdo.annotations.IdGeneratorStrategy;
 import javax.jdo.annotations.PersistenceCapable;
 import javax.jdo.annotations.Persistent;
@@ -42,6 +44,12 @@ import java.util.List;
  *
  * @since 4.10.0
  */
+@FetchGroups(value = {
+        @FetchGroup(name = "ALL", members = {
+                @Persistent(name = "supplier"),
+                @Persistent(name = "authors")
+        })
+})
 @PersistenceCapable(table = "PROJECT_METADATA")
 @JsonInclude(Include.NON_NULL)
 public class ProjectMetadata {
